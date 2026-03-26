@@ -7,7 +7,7 @@
 # ------------------------------------------------------------------------------
 sshport=22;
 #Check that user is root.
-if [ “$(id -u)” = “0” ]; then
+if [ "$(id -u)" = "0" ]; then
 printf "Bingo! you are root. Continue on....\n"
   else
 printf "Sorry, This script must be run as root\n"
@@ -15,14 +15,12 @@ exit;
 fi
 #What Distro are you on?
 printf "Distro are you on??\n" 2>&1
-OS='cat /etc/redhat-release | awk {'print $1}'
-if [ "$OS" = "CentOS" ]; then
-echo "System runs on CentOS 7.X. Checking Continue on....";
-VN='cat /etc/redhat-release | awk {'print $3}'
-else [ "$VN" != "7.*" ]; elseif
-echo "Installation failed. System runs on unsupported Linux. Exiting...";
-exit;
-fi 
+OS=$(awk '{print $1}' /etc/redhat-release)
+if [[ "$OS" != "AlmaLinux" && "$OS" != "CentOS" ]]; then
+    echo "Unsupported OS"
+    exit 1
+fi
+ 
 if [ -z "$1" ]; then
  echo "usage <username> <userpass> <master ip>";
  exit 0;
@@ -38,16 +36,16 @@ fi
 echo "Saving most outputs to /root/install.log";
 
 echo "doing updates and installs"
-yum update -y > /root/install.log
-yum install epel-release -y >> /root/install.log
-yum install bind bind-utils wget -y >> /root/install.log
+dnf update -y > /root/install.log
+dnf install epel-release -y >> /root/install.log
+dnf install bind bind-utils wget tar firewalld -y >> /root/install.log
 
 systemctl start named >> /root/install.log
 systemctl stop named >> /root/install.log
 
 echo "creating user "$1" and adding to wheel"
 useradd -G wheel $1 > /root/install.log
-echo $2 |passwd $1 --stdin  >> /root/install.log
+echo "$1:$2" | chpasswd  >> /root/install.log
 echo "Disabling root access to ssh use "$1"."
 echo -n "${MAGENTA}Enter SSH port to change (recommended) from ${BLUE}${sshport}${MAGENTA}:${NORMAL} "
 		read customsshport
@@ -88,19 +86,19 @@ pid             /usr/local/directslave/run/directslave.pid
 access_log	/usr/local/directslave/log/access.log
 error_log	/usr/local/directslave/log/error.log
 action_log	/usr/local/directslave/log/action.log
-named_workdir   /etc/namedb/secondary
-named_conf	/etc/namedb/directslave.inc
+named_workdir   /etc/named/secondary
+named_conf	/etc/named/directslave.inc
 retry_time	1200
 rndc_path	/usr/sbin/rndc
 named_format    text
 authfile        /usr/local/directslave/etc/passwd
 EOF
 
-#mkdir /etc/namedb
-mkdir -p /etc/namedb/secondary
-touch /etc/namedb/secondary/named.conf
-touch /etc/namedb/directslave.inc
-chown named:named -R /etc/namedb
+#mkdir /etc/named
+mkdir -p /etc/named/secondary
+touch /etc/named/secondary/named.conf
+touch /etc/named/directslave.inc
+chown named:named -R /etc/named
 mkdir /var/log/named
 touch /var/log/named/security.log
 chmod a+w -R /var/log/named
@@ -159,7 +157,7 @@ zone "." IN {
 };
 include "/etc/named.rfc1912.zones";
 include "/etc/named.root.key";
-include "/etc/namedb/directslave.inc";
+include "/etc/named/directslave.inc";
 EOF
 
 touch /usr/local/directslave/etc/passwd
@@ -210,3 +208,4 @@ echo "all done!"
 echo "Open the DirectSlave Dashboard using a web browser http://your-ip-address:2222"
 echo "if failed browse using IP address, edit /usr/local/directslave/etc/directslave.conf and change the host 127.0.0.1 to your current IP address"
 exit 0;
+
